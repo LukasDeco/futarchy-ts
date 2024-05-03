@@ -3,12 +3,11 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import {
-  Dao,
   DaoAggregate,
   FutarchyProtocol,
   TokenProps,
   TokenWithBalance,
-  TokenWithBalanceWithProposal,
+  TokenWithBalancePDAAndProposal,
   TokenWithPDA,
 } from "@/types";
 import { FutarchyBalancesClient } from "@/client";
@@ -19,11 +18,9 @@ import { Observable } from "rxjs";
 
 export class FutarchyRPCBalancesClient implements FutarchyBalancesClient {
   private rpcProvider: Provider;
-  private futarchyProtocols: FutarchyProtocol[];
 
-  constructor(rpcProvider: Provider, futarchyProtocols: FutarchyProtocol[]) {
+  constructor(rpcProvider: Provider) {
     this.rpcProvider = rpcProvider;
-    this.futarchyProtocols = futarchyProtocols;
   }
 
   //TODO create a more general function for fetching balances on an array of token mints
@@ -168,7 +165,7 @@ export class FutarchyRPCBalancesClient implements FutarchyBalancesClient {
     baseToken: TokenProps,
     quoteToken: TokenProps,
     proposals: Proposal[]
-  ): Promise<TokenWithBalanceWithProposal[]> {
+  ): Promise<TokenWithBalancePDAAndProposal[]> {
     const tokenBalances = await Promise.all(
       proposals.map(async (proposal) => {
         if (ownerWallet && proposal.publicKey && quoteToken.publicKey) {
@@ -241,41 +238,45 @@ export class FutarchyRPCBalancesClient implements FutarchyBalancesClient {
           ];
 
           const tokensBalances = await Promise.all(
-            tokensWithPDA.map(async (t) => {
-              try {
-                const tokenBalance =
-                  await this.rpcProvider.connection.getTokenAccountBalance(
-                    t.pda
-                  );
-                return {
-                  balance: tokenBalance.value.uiAmount ?? 0,
-                  token: t.token,
-                  proposal: t.proposal,
-                };
-              } catch (e) {
-                if (!JSON.stringify(e).includes("could not find account")) {
-                  console.info(
-                    "error fetching wallet balance for token:",
-                    t.token.symbol
-                  );
+            tokensWithPDA.map<Promise<TokenWithBalancePDAAndProposal>>(
+              async (t) => {
+                try {
+                  const tokenBalance =
+                    await this.rpcProvider.connection.getTokenAccountBalance(
+                      t.pda
+                    );
+                  return {
+                    balance: tokenBalance.value.uiAmount ?? 0,
+                    token: t.token,
+                    proposal: t.proposal,
+                    pda: t.pda,
+                  };
+                } catch (e) {
+                  if (!JSON.stringify(e).includes("could not find account")) {
+                    console.info(
+                      "error fetching wallet balance for token:",
+                      t.token.symbol
+                    );
+                  }
+                  return {
+                    balance: 0,
+                    token: t.token,
+                    proposal: t.proposal,
+                    pda: t.pda,
+                  };
                 }
-                return {
-                  balance: 0,
-                  token: t.token,
-                  proposal: t.proposal,
-                };
               }
-            })
+            )
           );
 
           return tokensBalances.filter(
-            (b): b is TokenWithBalanceWithProposal => !!b
+            (b): b is TokenWithBalancePDAAndProposal => !!b
           );
         }
       })
     );
     return tokenBalances
-      .filter((tb): tb is TokenWithBalanceWithProposal[] => !!tb)
+      .filter((tb): tb is TokenWithBalancePDAAndProposal[] => !!tb)
       .flat();
   }
 

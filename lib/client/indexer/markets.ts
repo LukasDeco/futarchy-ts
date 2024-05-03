@@ -84,6 +84,7 @@ export class FutarchyIndexerMarketsClient implements FutarchyMarketsClient {
       return () => subscriptionCleanup();
     });
   }
+  // different methods beetween amm and orderbooks
   watchSpotPrices(marketKey: PublicKey): Observable<SpotObservation[]> {
     const { query, variables } = generateSubscriptionOp({
       takes: {
